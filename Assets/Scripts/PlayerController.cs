@@ -10,9 +10,14 @@ public class PlayerController : MonoBehaviour
     public float walkSpeed = 10f;
     public float gravity = 20f;
     public float jumpSpeed = 15f;
+    public float doubleJumpSpeed = 15f;
+
+    // Player ability toggles
+    public bool canDoubleJump;
 
     // Player state
     public bool isJumping; // true when the player is jumping
+    public bool isDoubleJumping; // true when the player is double-jumping
 
     // Input properties
     private bool _startJump; // true when jump button started
@@ -31,15 +36,27 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+
         // Update x dimension
         _moveDirection.x = _input.x;
         _moveDirection.x *= walkSpeed;
+
+        if(_moveDirection.x < 0)
+        {
+            transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        } else if(_moveDirection.x > 0)
+        {
+            transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+        }
 
         // Update y dimension
         if (_characterController.below) // ground collision detected
         {
             _moveDirection.y = 0f;
+
             isJumping = false;
+            isDoubleJumping = false;
+
             if(_startJump) // jumping event initiated
             {
                 _startJump = false;
@@ -59,9 +76,34 @@ public class PlayerController : MonoBehaviour
                     _moveDirection.y *= 0.5f;
                 }
             }
-            _moveDirection.y -= gravity * Time.deltaTime;
+
+            // double-jumping
+            if (_startJump)
+            {
+                if(canDoubleJump && (!_characterController.left && !_characterController.right))
+                {
+                    if (!isDoubleJumping)
+                    {
+                        _moveDirection.y = doubleJumpSpeed;
+                        isDoubleJumping = true;
+                    }
+                }
+                _startJump = false;
+            }
+
+            GravityCalculations();
         }
         _characterController.Move(_moveDirection * Time.deltaTime);
+    }
+
+    // gravity behaviour while jumping
+    void GravityCalculations()
+    {
+        if(_moveDirection.y > 0f && _characterController.above)
+        {
+            _moveDirection.y = 0f; // stop vertical movement when colliding with an object above
+        }
+        _moveDirection.y -= gravity * Time.deltaTime;
     }
 
     // Input methods
@@ -76,10 +118,12 @@ public class PlayerController : MonoBehaviour
         if (context.started) // button pressed
         {
             _startJump = true;
+            _releaseJump = false;
         }
         else if (context.canceled) // button released
         {
             _releaseJump = true;
+            _startJump = false;
         }
     }
 
