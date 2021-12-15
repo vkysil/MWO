@@ -167,6 +167,10 @@ public class PlayerController : MonoBehaviour
                 {
                     isDoubleJumping = false;
                 }
+                else
+                {
+                    isDoubleJumping = true;
+                }
             }
             _startJump = false;
         }
