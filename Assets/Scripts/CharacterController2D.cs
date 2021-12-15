@@ -21,6 +21,8 @@ public class CharacterController2D : MonoBehaviour
     private Vector2[] _raycastPosition = new Vector2[3];
     private RaycastHit2D[] _raycastHits = new RaycastHit2D[3]; // information about object colliding with raycast
 
+    private bool _disabledGroundCheck;
+
     // Start method
     void Start()
     {
@@ -35,7 +37,10 @@ public class CharacterController2D : MonoBehaviour
         _currentPosition = _lastPosition + _moveAmount;
         _rigidbody.MovePosition(_currentPosition);
         _moveAmount = Vector2.zero;
-        CheckGrounded();
+        if (!_disabledGroundCheck)
+        {
+            CheckGrounded();
+        }
     }
 
     // Movement update method adjusted to framerate
@@ -85,6 +90,19 @@ public class CharacterController2D : MonoBehaviour
         {
             Debug.DrawRay(_raycastPosition[i], direction * raycastDistance, color);
         }
+    }
+
+    public void DisableGroundCheck()
+    {
+        below = false;
+        _disabledGroundCheck = true;
+        StartCoroutine("EnableGroundCheck");
+    }
+
+    IEnumerator EnableGroundCheck()
+    {
+        yield return new WaitForSeconds(0.1f);
+        _disabledGroundCheck = false;
     }
 
 }
