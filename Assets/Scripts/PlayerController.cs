@@ -38,6 +38,7 @@ public class PlayerController : MonoBehaviour
         // Update y dimension
         if (_characterController.below) // ground collision detected
         {
+            _moveDirection.y = 0f;
             isJumping = false;
             if(_startJump) // jumping event initiated
             {

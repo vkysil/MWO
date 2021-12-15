@@ -1,15 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using GlobalTypes;
 
 // Controller for all characters movement
 public class CharacterController2D : MonoBehaviour
 {
     public float raycastDistance = 0.2f; // distance for raycasts used to detect ground collision
     public LayerMask layerMask; // filtering out certain geometries
+    public float slopeAngleLimit = 45; // maximum slope angle characters can move over
+    public float downForceAdjustment = 1.2f; // additional down force for more fluid slope movement
 
     // flags
     public bool below; // TRUE if something is below the player, FALSE otherwise
+    public GroundType groundType; // type of ground the player is standing on
 
     private Vector2 _moveAmount;
     private Vector2 _currentPosition;
@@ -21,7 +25,10 @@ public class CharacterController2D : MonoBehaviour
     private Vector2[] _raycastPosition = new Vector2[3];
     private RaycastHit2D[] _raycastHits = new RaycastHit2D[3]; // information about object colliding with raycast
 
-    private bool _disabledGroundCheck;
+    private bool _disabledGroundCheck; // disable ground check while beginning a jump
+
+    private Vector2 _slopeNormal; // normal perpendicular to the slope
+    private float _slopeAngle; // angle of the slope
 
     // Start method
     void Start()
@@ -34,6 +41,14 @@ public class CharacterController2D : MonoBehaviour
     void FixedUpdate()
     {
         _lastPosition = _rigidbody.position;
+        if(_slopeAngle != 0 && below == true) // character is on a slope
+        {
+            if((_moveAmount.x > 0f && _slopeAngle > 0f) || (_moveAmount.x < 0f && _slopeAngle < 0f))
+            {
+                _moveAmount.y = -Mathf.Abs(Mathf.Tan(_slopeAngle * Mathf.Deg2Rad) *_moveAmount.x);
+                _moveAmount.y *= downForceAdjustment;
+            }
+        }
         _currentPosition = _lastPosition + _moveAmount;
         _rigidbody.MovePosition(_currentPosition);
         _moveAmount = Vector2.zero;
@@ -75,12 +90,39 @@ public class CharacterController2D : MonoBehaviour
 
         if (numberOfGroundHits > 0)
         {
-            below = true;
+            if(_raycastHits[1].collider) // if the middle raycast collides with something
+            {
+                groundType = DetermineGroundType(_raycastHits[1].collider);
+                _slopeNormal = _raycastHits[1].normal;
+                _slopeAngle = Vector2.SignedAngle(_slopeNormal, Vector2.up); // calculate angle between up direction and direction of the slope
+            }
+            else
+            {
+                for(int i = 0; i < _raycastHits.Length; i++) // check other raycasts
+                {
+                    if (_raycastHits[i].collider)
+                    {
+                        groundType = DetermineGroundType(_raycastHits[i].collider);
+                        _slopeNormal = _raycastHits[i].normal;
+                        _slopeAngle = Vector2.SignedAngle(_slopeNormal, Vector2.up); // calculate angle between up direction and direction of the slope
+                    }
+                }
+            }
+            if(_slopeAngle > slopeAngleLimit || _slopeAngle < -slopeAngleLimit)
+            {
+                below = false;
+            }
+            else
+            {
+                below = true;
+            }
         }
         else
         {
+            groundType = GroundType.None;
             below = false;
         }
+        System.Array.Clear(_raycastHits, 0, _raycastHits.Length);
     }
 
     // Debug method making raycasts visible
@@ -103,6 +145,19 @@ public class CharacterController2D : MonoBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         _disabledGroundCheck = false;
+    }
+
+    private GroundType DetermineGroundType(Collider2D collider)
+    {
+        if (collider.GetComponent<GroundEffector>())
+        {
+            GroundEffector groundEffector = collider.GetComponent<GroundEffector>();
+            return groundEffector.groundType;
+        }
+        else
+        {
+            return GroundType.LevelGeometry;
+        }
     }
 
 }
