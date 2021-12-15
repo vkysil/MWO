@@ -300,7 +300,7 @@ public class CharacterController2D : MonoBehaviour
         }
         else
         {
-            return WallType.Normal;
+            return WallType.LevelGeometry;
         }
     }
 
@@ -308,8 +308,8 @@ public class CharacterController2D : MonoBehaviour
     {
         if(_tempMovingPlatform && groundType == GroundType.MovingPlatform)
         {
-            _movingPlatformVelocity = _tempMovingPlatform.GetComponent<MovingPlatform>().difference;
-            return _movingPlatformVelocity
+            _movingPlatformVelocity = _tempMovingPlatform.GetComponent<MovingPlatform>().frameDifference;
+            return _movingPlatformVelocity;
         }
         else
         {
