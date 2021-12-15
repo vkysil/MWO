@@ -18,6 +18,10 @@ public class CharacterController2D : MonoBehaviour
     public bool above; // TRUE if something is above the player, FALSE otherwise
     
     public GroundType groundType; // type of ground the player is standing on
+    public GroundType ceilingType;
+    public WallType leftWallType; // temp
+    public WallType rightWallType; // temp
+
     public bool hitGroundThisFrame; // TRUE if character collided with the ground in the current frame
 
     private Vector2 _moveAmount;
@@ -37,6 +41,9 @@ public class CharacterController2D : MonoBehaviour
 
     private bool _inAirLastFrame; // TRUE if character wasn't colliding with the ground last frame
 
+    private Transform _tempMovingPlatform; // used to keep a character standing on the moving platform
+    private Vector2 _movingPlatformVelocity; // velocity of the moving platform
+
     // Start method
     void Start()
     {
@@ -49,7 +56,9 @@ public class CharacterController2D : MonoBehaviour
     {
         _inAirLastFrame = !below;
         _lastPosition = _rigidbody.position;
-        if(_slopeAngle != 0 && below == true) // character is on a slope
+
+        // character is on a slope
+        if (_slopeAngle != 0 && below == true) 
         {
             if((_moveAmount.x > 0f && _slopeAngle > 0f) || (_moveAmount.x < 0f && _slopeAngle < 0f))
             {
@@ -57,6 +66,23 @@ public class CharacterController2D : MonoBehaviour
                 _moveAmount.y *= downForceAdjustment;
             }
         }
+
+        // character is on a moving platform
+        if(groundType == GroundType.MovingPlatform)
+        {
+            // offset the player's movement on the X with the platform velocity
+            _moveAmount.x += MovingPlatformAdjust().x;
+
+            // if platform is moving down
+            // offset the player's movement on the Y with the platform velocity
+            if (MovingPlatformAdjust().y < 0f)
+            {
+                _moveAmount.y += MovingPlatformAdjust().y;
+                _moveAmount.y *= downForceAdjustment;
+            }  
+
+        }
+
         _currentPosition = _lastPosition + _moveAmount;
         _rigidbody.MovePosition(_currentPosition);
         _moveAmount = Vector2.zero;
@@ -84,10 +110,12 @@ public class CharacterController2D : MonoBehaviour
             raycastDistance * 2, layerMask);
         if (leftHit.collider)
         {
+            leftWallType = DetermineWallType(leftHit.collider);
             left = true;
         }
         else
         {
+            leftWallType = WallType.None;
             left = false;
         }
 
@@ -96,10 +124,12 @@ public class CharacterController2D : MonoBehaviour
             raycastDistance * 2, layerMask);
         if (rightHit.collider)
         {
+            rightWallType = DetermineWallType(rightHit.collider);
             right = true;
         }
         else
         {
+            rightWallType = WallType.None;
             right = false;
         }
 
@@ -108,10 +138,12 @@ public class CharacterController2D : MonoBehaviour
             0f, Vector2.up, raycastDistance, layerMask);
         if (aboveHit.collider)
         {
+            ceilingType = DetermineGroundType(aboveHit.collider);
             above = true;
         }
         else
         {
+            ceilingType = GroundType.None;
             above = false;
         }
 
@@ -147,6 +179,10 @@ public class CharacterController2D : MonoBehaviour
         {
             groundType = GroundType.None;
             below = false;
+            if (_tempMovingPlatform)
+            {
+                _tempMovingPlatform = null;
+            }
         }
     }
 
@@ -240,11 +276,44 @@ public class CharacterController2D : MonoBehaviour
         if (collider.GetComponent<GroundEffector>())
         {
             GroundEffector groundEffector = collider.GetComponent<GroundEffector>();
+            if(groundType == GroundType.MovingPlatform)
+            {
+                if (!_tempMovingPlatform)
+                {
+                    _tempMovingPlatform = collider.transform;
+                }
+            }
             return groundEffector.groundType;
         }
         else
         {
             return GroundType.LevelGeometry;
+        }
+    }
+
+    private WallType DetermineWallType(Collider2D collider)
+    {
+        if (collider.GetComponent<WallEffector>())
+        {
+            WallEffector wallEffector = collider.GetComponent<WallEffector>();
+            return wallEffector.wallType;
+        }
+        else
+        {
+            return WallType.Normal;
+        }
+    }
+
+    private Vector2 MovingPlatformAdjust()
+    {
+        if(_tempMovingPlatform && groundType == GroundType.MovingPlatform)
+        {
+            _movingPlatformVelocity = _tempMovingPlatform.GetComponent<MovingPlatform>().difference;
+            return _movingPlatformVelocity
+        }
+        else
+        {
+            return Vector2.zero;
         }
     }
 

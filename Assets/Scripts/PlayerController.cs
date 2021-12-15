@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using GlobalTypes;
 
 // Controller for player-specific movement
 public class PlayerController : MonoBehaviour
@@ -27,6 +28,8 @@ public class PlayerController : MonoBehaviour
     public bool isJumping; // true when the player is jumping
     public bool isDoubleJumping; // true when the player is double-jumping
     public bool isWallJumping; // true when the player is wall-jumping
+    public bool isCrouching; // true when the player is crouching
+    public bool isMovingCrouched; // true when the player is moving while crouched
     #endregion
 
     #region private properties
@@ -36,12 +39,20 @@ public class PlayerController : MonoBehaviour
     private Vector2 _input;
     private Vector2 _moveDirection;
     private CharacterController2D _characterController;
+
+    private CapsuleCollider2D _capsuleCollider;
+    private Vector2 _originalColliderSize;
+    // TODO: remove later when we add separate sprites for animations
+    private SpriteRenderer _spriteRenderer;
     #endregion
 
     // Start is called before the first frame update
     void Start()
     {
         _characterController = gameObject.GetComponent<CharacterController2D>();
+        _capsuleCollider = gameObject.GetComponent<CapsuleCollider2D>();
+        _spriteRenderer = gameObject.GetComponent<SpriteRenderer>();
+        _originalColliderSize = _capsuleCollider.size;
     }
 
     // Update is called once per frame
@@ -90,6 +101,7 @@ public class PlayerController : MonoBehaviour
         ClearAirAbilityFlags();
 
         Jump();
+        Crouch();
 
     }
 
@@ -107,18 +119,78 @@ public class PlayerController : MonoBehaviour
         if (_startJump) // jumping event initiated
         {
             _startJump = false;
-            _moveDirection.y = jumpSpeed;
+            // check if we're on a one-way platform
+            if (isCrouching && _characterController.groundType == GroundType.OneWayPlatform)
+            {
+                StartCoroutine(DisableOneWayPlatform(true));
+            }
+            else
+            {
+                _moveDirection.y = jumpSpeed;
+            }
             isJumping = true;
             _characterController.DisableGroundCheck();
+        }
+    }
+
+    // method for crouching and moving while crouched
+    void Crouch()
+    {
+        if (_input.y < 0f)
+        {
+            if (!isCrouching && !isMovingCrouched)
+            {
+                _capsuleCollider.size = new Vector2(_capsuleCollider.size.x, _capsuleCollider.size.y / 2);
+                transform.position = new Vector2(transform.position.x, transform.position.y - (_originalColliderSize.y / 4));
+                isCrouching = true;
+                _spriteRenderer.sprite = Resources.Load<Sprite>("directionSpriteUp_crouching");
+            }
+
+        }
+        else
+        {
+            if (isCrouching || isMovingCrouched)
+            {
+                RaycastHit2D hitCeiling = Physics2D.CapsuleCast(_capsuleCollider.bounds.center,
+                    transform.localScale, CapsuleDirection2D.Vertical, 0f, Vector2.up, _originalColliderSize.y / 2,
+                    _characterController.layerMask); // checking if anything is above the player
+                if (!hitCeiling.collider)
+                {
+                    _capsuleCollider.size = _originalColliderSize;
+                    transform.position = new Vector2(transform.position.x, transform.position.y + (_originalColliderSize.y / 4));
+                    _spriteRenderer.sprite = Resources.Load<Sprite>("directionSpriteUp");
+                    isCrouching = false;
+                    isMovingCrouched = false;
+                }
+            }
+        }
+        if (isCrouching && _moveDirection.x != 0)
+        {
+            isMovingCrouched = true;
+        }
+        else
+        {
+            isMovingCrouched = false;
         }
     }
 
     // method responsible for interactions while collision below character is NOT detected
     void InAir()
     {
+
+        AirCrouch();
         AirJump();
 
         GravityCalculations();
+    }
+
+    void AirCrouch()
+    {
+        if((isCrouching || isMovingCrouched) && _moveDirection.y > 0)
+        {
+            StartCoroutine("ClearCrouchingState");
+        }
+        
     }
 
     // method for jump-related interactions while in-air
@@ -181,7 +253,14 @@ public class PlayerController : MonoBehaviour
     {
         if(_moveDirection.y > 0f && _characterController.above)
         {
-            _moveDirection.y = 0f; // stop vertical movement when colliding with an object above
+            if(_characterController.ceilingType == GroundType.OneWayPlatform)
+            {
+                StartCoroutine(DisableOneWayPlatform(false));
+            }
+            else
+            {
+                _moveDirection.y = 0f; // stop vertical movement when colliding with an object above
+            }
         }
         _moveDirection.y -= gravity * Time.deltaTime;
     }
@@ -214,6 +293,56 @@ public class PlayerController : MonoBehaviour
         isWallJumping = true;
         yield return new WaitForSeconds(0.4f);
         isWallJumping = false;
+    }
+
+    IEnumerator ClearCrouchingState()
+    {
+        yield return new WaitForSeconds(0.05f);
+        RaycastHit2D hitCeiling = Physics2D.CapsuleCast(_capsuleCollider.bounds.center, transform.localScale,
+            CapsuleDirection2D.Vertical, 0f, Vector2.up, _originalColliderSize.y / 2, _characterController.layerMask);
+        if (!hitCeiling.collider)
+        {
+            _capsuleCollider.size = _originalColliderSize;
+            _spriteRenderer.sprite = Resources.Load<Sprite>("directionSpriteUp");
+            isCrouching = false;
+            isMovingCrouched = false;
+        }
+    }
+
+    IEnumerator DisableOneWayPlatform(bool checkBelow)
+    {
+        GameObject tempOneWayPlatform = null;
+        if (checkBelow) // player is ontop of the platform
+        {
+            Vector2 raycastBelow = transform.position - new Vector3(0, _capsuleCollider.size.y * 0.5f, 0);
+            RaycastHit2D hit = Physics2D.Raycast(raycastBelow, Vector2.down, _characterController.raycastDistance, 
+                _characterController.layerMask);
+            if (hit.collider)
+            {
+                tempOneWayPlatform = hit.collider.gameObject;
+            }
+        }
+        else // player is below the platform
+        {
+            Vector2 raycastAbove = transform.position + new Vector3(0, _capsuleCollider.size.y * 0.5f, 0);
+            RaycastHit2D hit = Physics2D.Raycast(raycastAbove, Vector2.up, _characterController.raycastDistance,
+                _characterController.layerMask);
+            if (hit.collider)
+            {
+                tempOneWayPlatform = hit.collider.gameObject;
+            }
+        }
+        if (tempOneWayPlatform)
+        {
+            // switching off platform collider
+            tempOneWayPlatform.GetComponent<EdgeCollider2D>().enabled = false; 
+        }
+        yield return new WaitForSeconds(0.75f);
+        if (tempOneWayPlatform)
+        {
+            // switching platform collider back on
+            tempOneWayPlatform.GetComponent<EdgeCollider2D>().enabled = true; 
+        }
     }
     #endregion
 }
