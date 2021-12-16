@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using GlobalTypes;
+using System;
 
 // Controller for player-specific movement
 public class PlayerController : MonoBehaviour
@@ -35,6 +36,7 @@ public class PlayerController : MonoBehaviour
     #region private properties
     private bool _startJump; // true when jump button started
     private bool _releaseJump; // true when jump button released
+    private bool _holdJump; // true when jump button is held down
 
     private Vector2 _input;
     private Vector2 _moveDirection;
@@ -44,6 +46,11 @@ public class PlayerController : MonoBehaviour
     private Vector2 _originalColliderSize;
     // TODO: remove later when we add separate sprites for animations
     private SpriteRenderer _spriteRenderer;
+
+    // jump pad properties
+    private float _jumpPadAmount = 15f;
+    private float _jumpPadAdjustment = 0f;
+    private Vector2 _tempVelocity; // velocity before hitting the ground
     #endregion
 
     // Start is called before the first frame update
@@ -95,6 +102,11 @@ public class PlayerController : MonoBehaviour
     // method responsible for interactions while collision below character is detected
     void OnGround()
     {
+        if (_characterController.hitGroundThisFrame)
+        {
+            _tempVelocity = _moveDirection;
+        }
+
         // clear any downward motion while on ground
         _moveDirection.y = 0f;
 
@@ -102,7 +114,44 @@ public class PlayerController : MonoBehaviour
 
         Jump();
         Crouch();
+        JumpPad();
 
+    }
+
+    // jump pad
+    private void JumpPad()
+    {
+        if(_characterController.groundType == GroundType.JumpPad)
+        {
+            _jumpPadAmount = _characterController.jumpPadAmount;
+
+            // if velocity while touching the jump pad
+            // is greater than jump pad amount
+            if(-_tempVelocity.y > _jumpPadAmount)
+            {
+                _moveDirection.y = -_tempVelocity.y * 0.92f;
+            }
+            else
+            {
+                _moveDirection.y = _jumpPadAmount;
+            }
+
+            // if holding jump button and a little each time we bounce
+            if (_holdJump)
+            {
+                _jumpPadAdjustment += _moveDirection.y * 0.1f;
+                _moveDirection.y += _jumpPadAdjustment;
+            }
+            else
+            {
+                _jumpPadAdjustment = 0f;
+            }
+            // enforce upper limit for the jump
+            if(_moveDirection.y > _characterController.jumpPadUpperLimit)
+            {
+                _moveDirection.y = _characterController.jumpPadUpperLimit;
+            }
+        }
     }
 
     // clear flags for all in-air abilities
@@ -278,11 +327,13 @@ public class PlayerController : MonoBehaviour
         {
             _startJump = true;
             _releaseJump = false;
+            _holdJump = true;
         }
         else if (context.canceled) // button released
         {
             _releaseJump = true;
             _startJump = false;
+            _holdJump = false;
         }
     }
     #endregion
