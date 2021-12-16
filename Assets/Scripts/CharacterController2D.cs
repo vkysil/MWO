@@ -3,59 +3,56 @@ using System.Collections.Generic;
 using UnityEngine;
 using GlobalTypes;
 
-// Controller for all characters movement
+// controller for all character movements
 public class CharacterController2D : MonoBehaviour
 {
+    // collision detection and movement
     public float raycastDistance = 0.2f; // distance for raycasts used to detect ground collision
-    public LayerMask layerMask; // filtering out certain layers we're not interested in
-    public float slopeAngleLimit = 45; // maximum slope angle characters can move over
     public float downForceAdjustment = 1.2f; // additional down force for more fluid slope movement
+    public float slopeAngleLimit = 45; // maximum slope angle characters can move over
+    public LayerMask layerMask; // filtering out unnecessary layers
 
     // collision flags
-    public bool below; // TRUE if something is below the player, FALSE otherwise
-    public bool left; // TRUE if something is to the left side of the player, FALSE otherwise
-    public bool right; // TRUE if something is to the right side of the player, FALSE otherwise
-    public bool above; // TRUE if something is above the player, FALSE otherwise
-    
-    public GroundType groundType; // type of ground the player is standing on
-    public GroundType ceilingType;
-    public WallType leftWallType; // temp
-    public WallType rightWallType; // temp
-
+    public bool below; // true if something is below the player
+    public bool left; // true if something is to the left side of the player
+    public bool right; // true if something is to the right side of the player
+    public bool above; // true if something is above the player
     public bool hitGroundThisFrame; // TRUE if character collided with the ground in the current frame
 
-    // for the jump pad
-    public float jumpPadAmount; 
-    public float jumpPadUpperLimit;
+    // ground and wall types
+    public GroundType groundType;
+    public GroundType ceilingType;
+    public WallType rightWallType;
+    public WallType leftWallType;
 
+    // movement variables
     private Vector2 _moveAmount;
     private Vector2 _currentPosition;
     private Vector2 _lastPosition;
 
-    private Rigidbody2D _rigidbody;
-    private CapsuleCollider2D _capsuleCollider;
+    // jump pad variables
+    public float jumpPadAmount; 
+    public float jumpPadUpperLimit;
 
-    private Vector2[] _raycastPosition = new Vector2[3];
-    private RaycastHit2D[] _raycastHits = new RaycastHit2D[3]; // information about object colliding with raycast
-
+    private Rigidbody2D _rigidbody; // default rigidbody
+    private CapsuleCollider2D _capsuleCollider; // default collider
+    private Vector2[] _raycastPosition = new Vector2[3]; // raycast origin
+    private RaycastHit2D[] _raycastHits = new RaycastHit2D[3]; // information about raycast colliders
     private bool _disabledGroundCheck; // disable ground check while beginning a jump
-
     private Vector2 _slopeNormal; // normal perpendicular to the slope
     private float _slopeAngle; // angle of the slope
-
-    private bool _inAirLastFrame; // TRUE if character wasn't colliding with the ground last frame
-
+    private bool _inAirLastFrame; // true if character wasn't colliding with the ground last frame
     private Transform _tempMovingPlatform; // used to keep a character standing on the moving platform
     private Vector2 _movingPlatformVelocity; // velocity of the moving platform
 
-    // Start method
+    // start method
     void Start()
     {
         _rigidbody = gameObject.GetComponent<Rigidbody2D>();
         _capsuleCollider = gameObject.GetComponent<CapsuleCollider2D>();
     }
 
-    // Update for the physics engine
+    // update for the physics engine
     void Update()
     {
         _inAirLastFrame = !below;
@@ -84,7 +81,6 @@ public class CharacterController2D : MonoBehaviour
                 _moveAmount.y += MovingPlatformAdjust().y;
                 _moveAmount.y *= downForceAdjustment;
             }  
-
         }
 
         _currentPosition = _lastPosition + _moveAmount;
@@ -109,7 +105,7 @@ public class CharacterController2D : MonoBehaviour
 
     private void CheckOtherCollisions()
     {
-        // check left
+        // check left collision
         RaycastHit2D leftHit = Physics2D.BoxCast(_capsuleCollider.bounds.center, _capsuleCollider.size * 0.75f, 0f, Vector2.left,
             raycastDistance * 2, layerMask);
         if (leftHit.collider)
@@ -123,7 +119,7 @@ public class CharacterController2D : MonoBehaviour
             left = false;
         }
 
-        // check right
+        // check right collision
         RaycastHit2D rightHit = Physics2D.BoxCast(_capsuleCollider.bounds.center, _capsuleCollider.size * 0.75f, 0f, Vector2.right,
             raycastDistance * 2, layerMask);
         if (rightHit.collider)
@@ -137,7 +133,7 @@ public class CharacterController2D : MonoBehaviour
             right = false;
         }
 
-        // check above
+        // check above collision
         RaycastHit2D aboveHit = Physics2D.CapsuleCast(_capsuleCollider.bounds.center, _capsuleCollider.size, CapsuleDirection2D.Vertical,
             0f, Vector2.up, raycastDistance, layerMask);
         if (aboveHit.collider)
@@ -153,13 +149,13 @@ public class CharacterController2D : MonoBehaviour
 
     }
 
-    // Movement update method adjusted to framerate
+    // movement update method adjusted to framerate
     public void Move(Vector2 movement)
     {
         _moveAmount += movement;
     }
 
-    // Check if player character collides with the ground
+    // check if player character collides with the ground
     private void CheckGrounded()
     {
         RaycastHit2D hit = Physics2D.CapsuleCast(_capsuleCollider.bounds.center, _capsuleCollider.size, CapsuleDirection2D.Vertical,
@@ -178,7 +174,8 @@ public class CharacterController2D : MonoBehaviour
             {
                 below = true;
             }
-            // jump pad
+
+            // jump pad logic
             if(groundType == GroundType.JumpPad)
             {
                 JumpPad jumpPad = hit.collider.GetComponent<JumpPad>();
@@ -198,70 +195,7 @@ public class CharacterController2D : MonoBehaviour
         }
     }
 
-
-    // Check if player character collides with the ground
-    // Previous version with 3 manual raycasts - deprecated
-    /* private void CheckGrounded()
-    {
-        Vector2 raycastOrigin = _rigidbody.position - new Vector2(0, _capsuleCollider.size.y * 0.5f);
-
-        _raycastPosition[0] = raycastOrigin + (Vector2.left * _capsuleCollider.size.x * 0.25f + Vector2.up * 0.1f);
-        _raycastPosition[1] = raycastOrigin;
-        _raycastPosition[2] = raycastOrigin + (Vector2.right * _capsuleCollider.size.x * 0.25f + Vector2.up * 0.1f);
-
-        DrawDebugRays(Vector2.down, Color.green);
-
-        // how many ray collisions with the ground happened
-        int numberOfGroundHits = 0;
-
-        for (int i = 0; i < _raycastPosition.Length; i++)
-        {
-            RaycastHit2D hit = Physics2D.Raycast(_raycastPosition[i], Vector2.down, raycastDistance, layerMask);
-            if (hit.collider)
-            {
-                _raycastHits[i] = hit;
-                numberOfGroundHits++;
-            }
-        }
-
-        if (numberOfGroundHits > 0)
-        {
-            if(_raycastHits[1].collider) // if the middle raycast collides with something
-            {
-                groundType = DetermineGroundType(_raycastHits[1].collider);
-                _slopeNormal = _raycastHits[1].normal;
-                _slopeAngle = Vector2.SignedAngle(_slopeNormal, Vector2.up); // calculate angle between up direction and direction of the slope
-            }
-            else
-            {
-                for(int i = 0; i < _raycastHits.Length; i++) // check other raycasts
-                {
-                    if (_raycastHits[i].collider)
-                    {
-                        groundType = DetermineGroundType(_raycastHits[i].collider);
-                        _slopeNormal = _raycastHits[i].normal;
-                        _slopeAngle = Vector2.SignedAngle(_slopeNormal, Vector2.up); // calculate angle between up direction and direction of the slope
-                    }
-                }
-            }
-            if(_slopeAngle > slopeAngleLimit || _slopeAngle < -slopeAngleLimit)
-            {
-                below = false;
-            }
-            else
-            {
-                below = true;
-            }
-        }
-        else
-        {
-            groundType = GroundType.None;
-            below = false;
-        }
-        System.Array.Clear(_raycastHits, 0, _raycastHits.Length);
-    } */
-
-    // Debug method making raycasts visible
+    // visible raycasts for debugging purposes
     private void DrawDebugRays(Vector2 direction, Color color)
     {
         for (int i = 0; i < _raycastPosition.Length; i++ )
@@ -270,6 +204,7 @@ public class CharacterController2D : MonoBehaviour
         }
     }
 
+    // ground check disable
     public void DisableGroundCheck()
     {
         below = false;
@@ -277,12 +212,14 @@ public class CharacterController2D : MonoBehaviour
         StartCoroutine("EnableGroundCheck");
     }
 
+    // ground check enable
     IEnumerator EnableGroundCheck()
     {
         yield return new WaitForSeconds(0.1f);
         _disabledGroundCheck = false;
     }
 
+    // determining the below collider ground type
     private GroundType DetermineGroundType(Collider2D collider)
     {
         if (collider.GetComponent<GroundEffector>())
@@ -303,6 +240,7 @@ public class CharacterController2D : MonoBehaviour
         }
     }
 
+    // determining the side collider wall type
     private WallType DetermineWallType(Collider2D collider)
     {
         if (collider.GetComponent<WallEffector>())
@@ -316,6 +254,7 @@ public class CharacterController2D : MonoBehaviour
         }
     }
 
+    // moving platform character movement adjustment
     private Vector2 MovingPlatformAdjust()
     {
         if(_tempMovingPlatform && groundType == GroundType.MovingPlatform)

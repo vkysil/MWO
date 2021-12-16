@@ -5,11 +5,11 @@ using UnityEngine.InputSystem;
 using GlobalTypes;
 using System;
 
-// Controller for player-specific movement
+// controller for player-specific movement
 public class PlayerController : MonoBehaviour
 {
 
-    #region public properties
+    // player properties
     [Header("Player Properties")]
     public float walkSpeed = 10f;
     public float gravity = 20f;
@@ -18,42 +18,39 @@ public class PlayerController : MonoBehaviour
     public float xWallJumpSpeed = 15f;
     public float yWallJumpSpeed = 15f;
 
+    // special ability toggles
     [Header("Player Abilities")]
-    // Player ability toggles
     public bool canDoubleJump;
     public bool canWallJump;
     public bool canDoubleJumpAfterWallJump;
 
-    // Player state
+    // player state
     [Header("Player State")]
     public bool isJumping; // true when the player is jumping
     public bool isDoubleJumping; // true when the player is double-jumping
     public bool isWallJumping; // true when the player is wall-jumping
     public bool isCrouching; // true when the player is crouching
     public bool isMovingCrouched; // true when the player is moving while crouched
-    #endregion
 
-    #region private properties
+    // private properties
     private bool _startJump; // true when jump button started
     private bool _releaseJump; // true when jump button released
     private bool _holdJump; // true when jump button is held down
 
-    private Vector2 _input;
-    private Vector2 _moveDirection;
-    private CharacterController2D _characterController;
+    private Vector2 _input; // default input
+    private Vector2 _moveDirection; // movement direction
+    private CharacterController2D _characterController; // default character controller
 
-    private CapsuleCollider2D _capsuleCollider;
-    private Vector2 _originalColliderSize;
-    // TODO: remove later when we add separate sprites for animations
-    private SpriteRenderer _spriteRenderer;
+    private CapsuleCollider2D _capsuleCollider; // default collider
+    private Vector2 _originalColliderSize; // original collider size
+    private SpriteRenderer _spriteRenderer; // sprite renderer
 
     // jump pad properties
     private float _jumpPadAmount = 15f;
     private float _jumpPadAdjustment = 0f;
-    private Vector2 _tempVelocity; // velocity before hitting the ground
-    #endregion
+    private Vector2 _initialVelocity; // velocity before hitting the jump pad
 
-    // Start is called before the first frame update
+    // start is called before the first frame update
     void Start()
     {
         _characterController = gameObject.GetComponent<CharacterController2D>();
@@ -62,10 +59,9 @@ public class PlayerController : MonoBehaviour
         _originalColliderSize = _capsuleCollider.size;
     }
 
-    // Update is called once per frame
+    // update is called once per frame
     void Update()
     {
-
         ProcessHorizontalMovement();
 
         // Update y dimension
@@ -104,21 +100,19 @@ public class PlayerController : MonoBehaviour
     {
         if (_characterController.hitGroundThisFrame)
         {
-            _tempVelocity = _moveDirection;
+            _initialVelocity = _moveDirection;
         }
 
         // clear any downward motion while on ground
         _moveDirection.y = 0f;
 
         ClearAirAbilityFlags();
-
         Jump();
         Crouch();
         JumpPad();
-
     }
 
-    // jump pad
+    // jump pad interactions
     private void JumpPad()
     {
         if(_characterController.groundType == GroundType.JumpPad)
@@ -127,9 +121,9 @@ public class PlayerController : MonoBehaviour
 
             // if velocity while touching the jump pad
             // is greater than jump pad amount
-            if(-_tempVelocity.y > _jumpPadAmount)
+            if(-_initialVelocity.y > _jumpPadAmount)
             {
-                _moveDirection.y = -_tempVelocity.y * 0.92f;
+                _moveDirection.y = -_initialVelocity.y * 0.92f;
             }
             else
             {
@@ -187,7 +181,7 @@ public class PlayerController : MonoBehaviour
     {
         if (_input.y < 0f)
         {
-            if (!isCrouching && !isMovingCrouched)
+            if (!isCrouching && !isMovingCrouched) // player is not crouched
             {
                 _capsuleCollider.size = new Vector2(_capsuleCollider.size.x, _capsuleCollider.size.y / 2);
                 transform.position = new Vector2(transform.position.x, transform.position.y - (_originalColliderSize.y / 4));
@@ -198,7 +192,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            if (isCrouching || isMovingCrouched)
+            if (isCrouching || isMovingCrouched) // player is already crouched
             {
                 RaycastHit2D hitCeiling = Physics2D.CapsuleCast(_capsuleCollider.bounds.center,
                     transform.localScale, CapsuleDirection2D.Vertical, 0f, Vector2.up, _originalColliderSize.y / 2,
@@ -213,6 +207,7 @@ public class PlayerController : MonoBehaviour
                 }
             }
         }
+        // flag setting
         if (isCrouching && _moveDirection.x != 0)
         {
             isMovingCrouched = true;
@@ -226,20 +221,18 @@ public class PlayerController : MonoBehaviour
     // method responsible for interactions while collision below character is NOT detected
     void InAir()
     {
-
         AirCrouch();
         AirJump();
-
         GravityCalculations();
     }
 
+    // disable crouch while jumping
     void AirCrouch()
     {
         if((isCrouching || isMovingCrouched) && _moveDirection.y > 0)
         {
             StartCoroutine("ClearCrouchingState");
         }
-        
     }
 
     // method for jump-related interactions while in-air
@@ -314,13 +307,13 @@ public class PlayerController : MonoBehaviour
         _moveDirection.y -= gravity * Time.deltaTime;
     }
 
-    #region input methods
-    // Method is called on each input event
+    // method is called on each input event
     public void OnMovement(InputAction.CallbackContext context)
     {
         _input = context.ReadValue<Vector2>();
     }
 
+    // jump flag setting
     public void OnJump(InputAction.CallbackContext context) 
     {
         if (context.started) // button pressed
@@ -336,9 +329,8 @@ public class PlayerController : MonoBehaviour
             _holdJump = false;
         }
     }
-    #endregion
 
-    #region coroutines
+    // after wall-jump control delay
     IEnumerator WallJumpWaiter()
     {
         isWallJumping = true;
@@ -346,6 +338,7 @@ public class PlayerController : MonoBehaviour
         isWallJumping = false;
     }
 
+    // exit crouching delay
     IEnumerator ClearCrouchingState()
     {
         yield return new WaitForSeconds(0.05f);
@@ -360,6 +353,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // one-way platform disable delay
     IEnumerator DisableOneWayPlatform(bool checkBelow)
     {
         GameObject tempOneWayPlatform = null;
@@ -395,5 +389,5 @@ public class PlayerController : MonoBehaviour
             tempOneWayPlatform.GetComponent<EdgeCollider2D>().enabled = true; 
         }
     }
-    #endregion
+
 }
